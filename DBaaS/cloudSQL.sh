@@ -11,31 +11,35 @@ efailedbackup=$((ebase+3))
 gcloud_login() {
   echo "--> logging into gcloud based on mounted SA creds"
   gcloud auth activate-service-account --key-file=/etc/gcloud/gcloud-credentials.json
+  rc=$?
+  if [ ${rc} -ne 0 ] ; then
+    echo "--> Error logging into gcloud"
+    return ${rc}
+  fi
 }
 
 install_jq() {
   echo "--> Installing jq"
   apt-get install -y jq
+  rc=$?
   if [ ${rc} -ne 0 ] ; then
     echo "--> Error installing jq"
     return ${rc}
   fi
 }
 
+check_for_jq() {
+  echo "--> Checking for jq"
+  which jq
+  rc=$?
+  if [ ${rc} -ne 0 ] ; then
+    install_jq
+  fi
+}
+
 prepare_for_action() {
   gcloud_login
-  rc=$?
-  if [ ${rc} -ne 0 ] ; then
-    echo "--> Error logging into gcloud"
-    return ${rc}
-  fi
-
-  install_jq
-  rc=$?
-  if [ ${rc} -ne 0 ] ; then
-    echo "--> Error checking for / installing jq"
-    return ${rc}
-  fi
+  check_for_jq
 }
 
 gcloud_sql_backup() {
