@@ -10,6 +10,7 @@ Some applications might require app-specific steps to be performed. This could b
 * before or after a snapshot is created.
 * before or after a backup is created.
 * after restoring from a snapshot or backup.
+* after a failover of an application (Astra Control Center with replication only).
 
 Astra Control can execute app-specific custom scripts called execution hooks.
 
@@ -30,6 +31,7 @@ User contributions are welcome! Take a look at the [Contribution Guide](#contrib
 | Snapshot         | Pre/Post         |                                        |
 | Backup           | Pre/Post-Backup  |                                        |
 | Restore          | Post-Restore     |Pre-restore is not needed and supported |
+| Failover         | Post-failover    |ACC with replication only
 
 ## Adding an Execution Hook
 
@@ -76,26 +78,27 @@ Consider the following when planning execution hooks for your apps.
 
     - Since execution hooks often reduce or completely disable the functionality of the application they are running against, you should always try to minimize the time your custom execution hooks take to run.
 
- *  The current version of Astra Control can only target the containers to execute hooks by image name. The hook will run for any container image that matches the provided regular expression rule in Astra Control., which can result a hooks script being executed multiple times in parallel for the same application. Take this into consideration when developing hook scripts.
+ *  When you add or edit an execution hook to an application, you can add filters to an execution hook to mange which containers the hook will match. Filters are useful for applications that use the same container image on all containers, but might use each image for a different purpose (such as Elasticsearch). Filters enable you to create scenarios where execution hooks will run on some of those identical containers, but not necessarily all of them. If you create multiple filters for a single execution hook, they are combined with a logical AND operator. You can have up to 10 active filters per execution hook.
+Each filter you add to an execution hook uses a regular expression to match containers in your cluster. When a hook matches a container, the hook will run its associated script on that container.
 
-    * To figure out an appropriate regular expression for your app’s containers, check the details of the pod(s) and look for the image(s), like below:
-    ```bash
-    ~ # kubectl get po -n mongodb3
-    NAME                        READY   STATUS    RESTARTS   AGE
-    mongodb3-54cbd55b54-5nqgh   1/1     Running   0          15h
-    ~ # kubectl describe pod/mongodb3-54cbd55b54-5nqgh -n mongodb3 | grep Image:
-        Image:          docker.io/bitnami/mongodb:5.0.9-debian-11-r3
-    ```
+    * Regular expressions for filters use the [Regular Expression 2 (RE2)](https://github.com/google/re2/wiki/Syntax) syntax, which does not support creating a filter that excludes containers from the list of matches.
 
- *  When a snapshot is run, execution hook events take place in the following order:
+    * The following hook filter types are available:
+        - Container image
+        - Namespace
+        - Pod name
+        - Label
+        - Container name
 
-    -   Any applicable custom pre-snapshot execution hooks are run on the appropriate containers. You can create and run as many custom pre-snapshot hooks as you need, but the order of execution of these hooks before the snapshot is neither guaranteed nor configurable.
+ *  When a snapshot or backup is run, execution hook events take place in the following order:
 
-    -   The snapshot is performed.
+    -   Any applicable pre-snapshot/backup execution hooks are run on the appropriate containers. You can create and run as many custom pre-snapshot/backup hooks as you need, but the order of execution of these hooks before the snapshot is neither guaranteed nor configurable.
 
-    -   Any applicable custom post-snapshot execution hooks are run on the appropriate containers. You can create and run as many custom post-snapshot hooks as you need, but the order of execution of these hooks after the snapshot is neither guaranteed nor configurable.
+    -   The snapshot/backup is performed.
 
-    -   Any applicable NetApp-provided default post-snapshot execution hooks are run on the appropriate containers.
+    -   Any applicable post-snapshot/backup execution hooks are run on the appropriate containers. You can create and run as many custom post-snapshot/backup hooks as you need, but the order of execution of these hooks after the snapshot/backup is neither guaranteed nor configurable.
+    
+ * When a restore is run, any applicable post-restore execution hooks are run on the appropriate containers after a 5min wait time after restore complete. You can create and run as many custom post-restore hooks as you need, but the order of execution of these hooks after the restore is neither guaranteed nor configurable.
 
  *  Always test your execution hook scripts before enabling them in a production environment. You can use the `kubectl exec` command to conveniently test the scripts. To do so, first upload the hook script you want to test into the pod where it’s supposed to run and then execute like, like in the example below:
 
@@ -144,6 +147,12 @@ Protection strategies are available for the following applications:
 * [PostgreSQL](https://github.com/NetApp/execution-hooks/tree/main/PostgreSQL)
 * [Redis](https://github.com/NetApp/execution-hooks/tree/main/Redis)
 * [Kafka](https://github.com/NetApp/execution-hooks/tree/main/Kafka)
+* [YugabyteDB](https://github.com/NetApp/Verda/tree/main/YugabyteDB)
+* [Microsoft SQL Server](https://github.com/NetApp/Verda/tree/main/SQLServer2022)
+
+[URL-Rewrite](https://github.com/NetApp/Verda/tree/main/URL-Rewrite) is a post-restore execution hook to change the container image URL from region A to region B (and/or B to A) after a restore. This is intended for use in situations where container registries are regional, and the original region is no longer available due to a DR scenario. The hook can be modified to change other settings after a restore like Ingress.
+
+[Post-restore-scale](https://github.com/NetApp/Verda/tree/main/Post-restore-scale) is a post-restore execution hook to change the number of replicas of deployments in a restored or cloned application after the restore.
 
 ## Contribution Guide
 
